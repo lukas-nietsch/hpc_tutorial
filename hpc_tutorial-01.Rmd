@@ -251,7 +251,7 @@ Rscript ${SCRIPTS[$SLURM_ARRAY_TASK_ID-1]}
 
 In this example_2.bash file is defined that the job contains an array of 2 sub-jobs, each of it should use 1 node, 1 task and 100 cores per task. The script loads first the R module, then the array is defined where the Rscripts paths are passed. The Rscripts then are called with the help of the array id.
 
-
+## Example 3
 
 
 
