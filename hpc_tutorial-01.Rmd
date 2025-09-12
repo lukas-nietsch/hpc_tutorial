@@ -1,0 +1,260 @@
+---
+title: "Introduction to Festus - The HPC Cluster at UBT "
+author: "Lukas Nietsch"
+date: "2025-09-10"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+      
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# High Performance Computing with Festus 
+This is a short Tutorial for High Performance Computing with Festus of the University of Bayreuth (UBT). The Keylab HPC at the UBT provided two HPC supercomputers. Emil, the older one, was taken out of service in July 2025. Since then Festus is accessible for all UBT Members. You can get more Info and Material here: https://www.hpc.uni-bayreuth.de/
+
+## Basic Information
+This tutorial will focus on the hpc system festus (btrzx24), since it is freely available for members of the UBT. This hpc cluster consists of two login nodes, two management nodes, several storage servers and 74 compute nodes which are connected by an 100 Gbit/s InfiniBand network. There are a few different compute nodes available. 64 typA (2x 64-core AMD Epyc 9554 CPU @ 3.1 GHz (3.75 GHz max.) and 24x 16GB RAM (total 384 GB), 480 GB NVMe), 5 tybB "HighMem" compute nodes, 1 typC compute server "NVidia" with 4x NVIDIA H100 GPUs, 1 typD compute server "Instinct", 3 typE compute servers "Mini NVidia", and 2 compute servers of typF "Mini Instinct". The exact specifications can be found here: https://www.hpc.uni-bayreuth.de/clusters/festus/
+
+## Acknowledging
+The HPC at the UBT is funded by DFG, so the results must be made available to the general public and the DFG-funding must be referenced in all publications. Please use this citing in the acknowledgment:
+
+```
+Calculations were performed using the festus-cluster of the 
+Bayreuth Centre for High Performance Computing (https://www.bzhpc.uni-bayreuth.de),
+funded by the Deutsche Forschungsgemeinschaft (DFG, German Research Foundation) - 523317330.
+```
+
+## File Systems
+The file system is basically a /home and a /workdir directory. The first one is individual for every user, but it´s different from the normal UBT myfiles-home directory. You have a maximum file space of 10 GB, whereas /workdir has no such per-user limit (~70TB in total), but it has neither backup or snapshots. Your personal workdir is $WORKDIR (/workdir/bt-identifier) and has a data lifetime of max. 60 days.
+
+## OS and Resource Manager
+Festus runs on the Linux distribution RHEL 9.6 / RockyLinux 9.6 with the resource manager Slurm 25.05. https://slurm.schedmd.com/overview.html
+
+# Getting started
+## Login to Festus
+To login to Festus open a terminal and simply type:
+
+```{bash eval = FALSE}
+ssh bt000000@festus.hpc.uni-bayreuth.de
+```
+
+whereas bt000000 has to be replaced by your personal userid.
+
+You have to be within the UBT network or if you are outside open a VPN via cisco.
+
+## Transfer data
+To transfer files from your local computer to your home or workdir directory on the cluster you have to navigate in a terminal to your local folder and then type in:
+```{bash eval=FALSE}
+scp myfile.txt bt000000@festus.hpc.uni-bayreuth.de:/home/xy/bt0000xy
+```
+whereas bt000000 has to be replaced by your personal userid and xy are the last 2 digits of your university account.
+
+To transfer files the other way:
+```{bash eval=FALSE}
+scp bt0000xy@festus.hpc.uni-bayreuth.de:/home/xy/bt0000xy/myfile.txt myfile.txt
+```
+
+If you want to transfer directories you have to use the '-r' option of scp.
+
+# Jobs, Job-Control, Modules
+The hpc cluster uses slurm 25.05 as a job-manager. Please give yourself a overview of the functions of slurm: https://slurm.schedmd.com/
+Nonetheless you find the most basic functions here for submitting jobs, control and modules.
+
+## Submitting Jobs
+When you have created a job-script, meaning a batch script that tells festus what to do, you can submit the job via slurm manager. This could be a first job:
+```{bash eval=FALSE}
+#!/bin/bash
+#SBATCH --job-name="hello"
+#SBATCH --nodes=1
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=bt000000@uni-bayreuth.de
+#SBATCH --time=0-00:00:10
+#SBATCH --error=%x_%j.err
+#SBATCH --output=%x_%j.out
+
+echo "Hello $USER, my name is $HOSTNAME."
+>&2 echo "This is an example error message from $HOSTNAME"
+echo
+echo "Well done $USER you submitted your first job!"
+```
+
+This code is saved in a file "hello" somewhere in your $HOME directory on the cluster. Then you submit it with this code:
+
+```{bash eval=FALSE}
+sbatch ./hello
+```
+
+Depending on the workload of the cluster, you should get two new files in your directory "hello_\*\*\*.err" and "hello_\*\*\*.out".
+
+## Basic Job Control
+To get an overview over all jobs running on the cluster use this command:
+```{bash eval=FALSE}
+squeue
+```
+
+With saact you get detailed information about a specific job. More information: https://slurm.schedmd.com/sacct.html
+```{bash eval=FALSE}
+saact -j jobid
+```
+
+There´s the option to modify some parameters of an existing job with "scontrol update jobid=<jobid> <OPTIONS>". This example adds email notification to the job:
+```{bash eval=FALSE}
+scontrol update jobid=1234 MailUser=bt123456@uni-bayreuth.de MailType=ALL
+```
+
+If you want to cancel your job or a specific job use: "scancel <jobid>" or "scancel -u $USER":
+```{bash eval=FALSE}
+scancel 1234
+scancel -u bt123456
+```
+
+## Specify the computing resources
+With your batch script you submit the job. So here you can give more details about the needed computing resources to the cluster. If you need to run the computation with GPUs you need to specify it. Festus has some computing nodes with GPUs.
+So the command would be structured like this: --partition=GPU --gres=gpu:<TYPE>:<N>
+For example:
+```{bash eval=FALSE}
+#SBATCH --partition=GPU --gres=gpu:h100:1
+```
+
+You should also specify how many tasks (processes) should run all over your job. If you don´t specify the option "--cpus-per-task" Slurm will reserve n cpus for n taskss.
+```{bash eval=FALSE}
+#SBATCH --ntasks=16
+#SBATCH --cpus-per-task=16
+```
+
+Also you should specify the number of nodes --nodes=N
+```{bash eval=FALSE}
+#SBATCH --nodes=2
+```
+
+## Loading Modules
+There is a lot of software pre-installed on the hpc. You can get a list of all apps, tools, compilers, and others with this command:
+```{bash eval=FALSE}
+module avail
+```
+
+To load for example R simply type:
+```{bash eval=FALSE}
+module load R/4.4.1
+```
+
+Some modules cannot be loaded directly because they depend on other modules. If you get an error like this, you can look up all dependend modules with this command:
+```{bash eval=FALSE}
+module spider R/4.4.1
+```
+
+To list all currently loaded modules use:
+```{bash eval=FALSE}
+module list
+```
+
+And to unload a single module or all modules use:
+```{bash eval=FALSE}
+module unload <MODULE>
+module purge #Unloads every loaded module
+```
+
+# Using R on the HPC Cluster
+
+To start R on the cluster simply type R after you loaded the module. Now you have the common R terminal available.
+
+## Install packages
+
+To install packages like terra, sf, lidR,... you need to load these modules prior to loading the R module:
+```{bash eval=FALSE}
+module load lib/gdal/3.4.0 lib/geos/3.10.1 lib/proj/8.1.1 gnu10/10.3.0 udunits/2.2.28 lib/openssl
+```
+
+It could happen that some libraries are not found and the installation of packages failes because of non-zero exit status. Then you should check which library caused that error. Steps to debug then are:
+
+1. Exit R and unload R module, then check that all necessary modules are loaded, then reload R module
+
+2. If you still can´t install the package because of non-zero exit status, you should specify the path variables within the package installation. For that you first need to get the path of the module via "module show <MODULE>". Then you can specify the path with the configure.args. This example shows the case for the sf - package.
+```{r eval=FALSE}
+install.packages("sf", configure.args="--with-sqlite3-lib=/opt/ohpc/pub/apps/sqlite/sqlite-autoconf-3370000_build/lib")
+```
+
+## Run R in an interactive Job
+
+For smaller project or calculations you could use R within an interactive job session. To start an interactive job with an interactive shell on a compute node, you can call "srun" with the "--pty" flag.
+```{bash eval=FALSE}
+srun --nodes=1 --cpus-per-task=2 --pty bash -i
+```
+
+After loading the R module, you simply type R into console to start the R console.
+
+## Example 1 - Submit R script to Job
+Here´s a short example how to structure a bash file that submits a job to SLURM:
+
+```{bash eval=FALSE}
+#!/bin/bash
+#SBATCH --job-name="example_1"
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=bt000000@uni-bayreuth.de
+#SBATCH --time=0-00:01:00
+#SBATCH --error=%x_%j.err     # %x - Job-Name
+#SBATCH --output=%x_%j.out    # %j - Job-Number
+
+echo "Hello $USER, my name is $HOSTNAME."
+echo "The job with the ID $SLURM_JOB_ID has started."
+
+module load R/4.4.1
+echo "R/4.4.1 loaded successfully"
+
+Rscript ./Rscripts/example_1.R
+
+echo "Rscript loaded successfully"
+echo "The job with the ID $SLURM_JOB_ID is finished."
+```
+
+Basically the bash script loads the module R and then loads the Script "example_1.R". The script just creates a random_data.csv file and logs all R console output to a script_log.txt file.
+
+You can try it yourself. The scripts are provided within this tutorial. You just have to copy the examples folder to your /workdir/bt000000 at the cluster and submit the bash script from the /examples directory to SLURM via this command:
+
+```{bash eval=FALSE}
+sbatch example_1.bash
+```
+
+After execution you should find two new files in the examples/ directory "example_1_JOB-ID.err" and "example_1_JOB-ID.out" and you find the files "log/script_log.txt" and "output/random_data.csv".
+
+## Example 2 - Array jobs
+Here´s an example how you could split your job to multiple nodes in a job array. Basically you tell SLURM within the bash script that your job is actually a collection of similar sub-jobs. All sub-jobs must have same initial options like size, time limit, error and output messages.
+
+```{bash eval=FALSE}
+#!/bin/bash
+#SBATCH --array=1-2
+#SBATCH --job-name="example_2"
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=100
+#SBATCH --mail-type=END,FAIL,ARRAY_TASKS
+#SBATCH --mail-user=bt000000@uni-bayreuth.de
+#SBATCH --time=0-00:03:00
+#SBATCH --error=ex_%A_%a.err
+#SBATCH --output=ex_%A_%a.out #err/out file with <JOBID>_<JOBARRAY_INDEX>
+
+module load R/4.4.1
+
+SCRIPTS=(./Rscripts/Permutationen_KDE_Cluster_8.R ./Rscripts/Permutationen_KDE_Cluster_9.R)
+
+Rscript ${SCRIPTS[$SLURM_ARRAY_TASK_ID-1]}
+```
+
+In this example_2.bash file is defined that the job contains an array of 2 sub-jobs, each of it should use 1 node, 1 task and 100 cores per task. The script loads first the R module, then the array is defined where the Rscripts paths are passed. The Rscripts then are called with the help of the array id.
+
+
+
+
+
+
+
+
