@@ -253,9 +253,7 @@ In this example_2.bash file is defined that the job contains an array of 2 sub-j
 
 ## Example 3
 
-
-test this out
-another test line
+Example 3 will show up soon!
 
 
 
